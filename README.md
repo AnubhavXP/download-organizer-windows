@@ -1,5 +1,7 @@
 # Download Organizer — Windows
 
+![Download Organizer Logo](DownloadOrganizer.png)
+
 A lightweight Windows utility that automatically organizes files in the user's **Downloads** folder by file type.
 
 The Windows version is written in **C# / .NET 8** and runs silently in the background without a console window.
