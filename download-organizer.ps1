@@ -15,6 +15,9 @@ $Folders = @{
     Fonts         = @("ttf","otf","woff","woff2")
 }
 
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+
 function Get-Folder($Extension) {
     foreach ($Folder in $Folders.Keys) {
         if ($Folders[$Folder] -contains $Extension) {
@@ -25,34 +28,84 @@ function Get-Folder($Extension) {
     return "Other"
 }
 
+function Test-ExplorerRenameMode {
+
+    try {
+        $ExplorerProcesses = Get-Process explorer -ErrorAction SilentlyContinue
+
+        foreach ($Explorer in $ExplorerProcesses) {
+
+            try {
+                if ($Explorer.MainWindowHandle -eq 0) {
+                    continue
+                }
+
+                $Window = [System.Windows.Automation.AutomationElement]::FromHandle(
+                    $Explorer.MainWindowHandle
+                )
+
+                if ($null -eq $Window) {
+                    continue
+                }
+
+                $EditCondition =
+                    New-Object System.Windows.Automation.PropertyCondition(
+                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                        [System.Windows.Automation.ControlType]::Edit
+                    )
+
+                $Edits = $Window.FindAll(
+                    [System.Windows.Automation.TreeScope]::Descendants,
+                    $EditCondition
+                )
+
+                foreach ($Edit in $Edits) {
+
+                    try {
+                        if (-not $Edit.Current.IsOffscreen) {
+                            return $true
+                        }
+                    }
+                    catch {
+                    }
+                }
+            }
+            catch {
+            }
+        }
+
+        return $false
+    }
+    catch {
+        return $false
+    }
+}
+
 function Organize-File($File) {
+
     if (-not (Test-Path -LiteralPath $File -PathType Leaf)) {
         return
     }
 
-    $Name = Split-Path $File -Leaf
+    try {
+        $Item = Get-Item -LiteralPath $File -ErrorAction Stop
+    }
+    catch {
+        return
+    }
 
+    $Name = $Item.Name
+
+    # Browser temporary files.
     if ($Name -like ".org.chromium.*") { return }
     if ($Name -like "*.crdownload") { return }
     if ($Name -like "*.part") { return }
     if ($Name -like "*.tmp") { return }
     if ($Name -like "Unconfirmed *") { return }
 
-    try {
-        $Size1 = (Get-Item -LiteralPath $File).Length
-        Start-Sleep -Seconds 2
-
-        if (-not (Test-Path -LiteralPath $File -PathType Leaf)) {
-            return
-        }
-
-        $Size2 = (Get-Item -LiteralPath $File).Length
-    }
-    catch {
-        return
-    }
-
-    if ($Size1 -ne $Size2) {
+    # Do not organize anything while Explorer has an active
+    # filename editor.
+    if (Test-ExplorerRenameMode) {
         return
     }
 
@@ -62,14 +115,16 @@ function Organize-File($File) {
     $DestinationFolder = Join-Path $Downloads $Folder
 
     if (-not (Test-Path -LiteralPath $DestinationFolder)) {
-        New-Item -ItemType Directory -Path $DestinationFolder | Out-Null
+        New-Item -ItemType Directory -Path $DestinationFolder -Force | Out-Null
     }
 
     $Destination = Join-Path $DestinationFolder $Name
 
     if (Test-Path -LiteralPath $Destination) {
+
         $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($Name)
         $ExtensionWithDot = [System.IO.Path]::GetExtension($Name)
+
         $Counter = 1
 
         do {
@@ -81,27 +136,25 @@ function Organize-File($File) {
     }
 
     try {
-        Move-Item -LiteralPath $File -Destination $Destination
+        Move-Item `
+            -LiteralPath $File `
+            -Destination $Destination `
+            -ErrorAction Stop
     }
     catch {
+        # Try again on the next scan.
     }
 }
 
-Get-ChildItem -LiteralPath $Downloads -File | ForEach-Object {
-    Organize-File $_.FullName
-}
-
-$Watcher = New-Object System.IO.FileSystemWatcher
-$Watcher.Path = $Downloads
-$Watcher.Filter = "*"
-$Watcher.NotifyFilter = [System.IO.NotifyFilters]::FileName
-$Watcher.IncludeSubdirectories = $false
-$Watcher.EnableRaisingEvents = $true
-
-Register-ObjectEvent -InputObject $Watcher -EventName Created -Action {
-    Organize-File $Event.SourceEventArgs.FullPath
-} | Out-Null
-
 while ($true) {
-    Wait-Event -Timeout 5 | Out-Null
+
+    Get-ChildItem `
+        -LiteralPath $Downloads `
+        -File `
+        -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Organize-File $_.FullName
+        }
+
+    Start-Sleep -Milliseconds 200
 }

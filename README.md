@@ -1,132 +1,160 @@
-# Download Organizer for Windows
+# Download Organizer — Windows
 
-A lightweight PowerShell-based download organizer for Windows 10 and Windows 11.
+A lightweight Windows utility that automatically organizes files in the user's **Downloads** folder by file type.
 
-Automatically sorts files downloaded directly into the user's Downloads folder into folders based on their file type.
+The Windows version is written in **C# / .NET 8** and runs silently in the background without a console window.
 
 ## Features
 
-- Automatically organizes downloaded files
-- Runs continuously in the background
-- Starts with Windows
-- Ignores browser temporary files
-- Prevents files from being overwritten
-- Automatically numbers duplicate filenames
-- Supports multiple file categories
-- Unknown file types are placed in Other
-- Uses native Windows PowerShell functionality
+- Automatically organizes files in `%USERPROFILE%\Downloads`
+- Scans existing files when the organizer starts
+- Continues checking for new files in the background
+- Waits for files to become available before moving them
+- Ignores common browser download/incomplete temporary files
+- Detects Windows Explorer's inline filename-rename mode and leaves the file alone until renaming is finished
+- Prevents overwriting existing files by adding `_1`, `_2`, etc.
+- Runs as a standalone Windows executable
+- Does not require the .NET runtime to be installed when using the self-contained release executable
 
 ## Categories
 
-- Images
-- Videos
-- Audio
-- Documents
-- Spreadsheets
-- Presentations
-- Archives
-- Installers
-- Disk Images
-- Code
-- Subtitles
-- Fonts
-- Other
+| Category | Examples |
+|---|---|
+| Images | JPG, JPEG, PNG, GIF, WEBP, BMP, SVG, TIFF, HEIC, AVIF, RAW |
+| Videos | MP4, MKV, AVI, MOV, WEBM, FLV, WMV, MPEG, TS |
+| Audio | MP3, WAV, FLAC, OGG, OPUS, AAC, M4A, WMA |
+| Documents | PDF, DOC, DOCX, TXT, ODT, RTF, EPUB |
+| Spreadsheets | XLS, XLSX, CSV, ODS, TSV |
+| Presentations | PPT, PPTX, ODP |
+| Archives | ZIP, RAR, 7Z, TAR, GZ, BZ2, XZ, ZST |
+| Installers | EXE, MSI, MSIX, MSIXBUNDLE |
+| Disk Images | ISO, IMG, VHD, VHDX |
+| Code | PY, PS1, SH, JS, TS, HTML, CSS, C, C++, JAVA, RS, GO, JSON, XML, YAML, SQL |
+| Subtitles | SRT, ASS, SSA, VTT, SUB |
+| Fonts | TTF, OTF, WOFF, WOFF2 |
+| Other | Extensions not covered above |
 
-## Requirements
+Files that do not match a category are placed in:
 
-- Windows 10 or Windows 11
-- PowerShell 5.1 or newer
+```text
+Downloads\Other
+```
 
-## Installation
+## Download and run
 
-Download the project files to your Windows computer.
+Download the latest `DownloadOrganizer.exe` from the repository's **Releases** page.
 
-Open PowerShell in the project directory.
+Run the executable.
 
-To allow local PowerShell scripts for your user account:
+The organizer works in the background and does not open a command prompt window.
 
-    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+## Start automatically with Windows
 
-Run the organizer:
+The simplest method is to create a shortcut to `DownloadOrganizer.exe` in the Windows Startup folder.
 
-    .\download-organizer.ps1
+1. Press `Win + R`.
+2. Enter:
 
-To start the organizer automatically when Windows starts:
+```text
+shell:startup
+```
 
-    .\install-startup.ps1
+3. Press Enter.
+4. Create a shortcut to `DownloadOrganizer.exe` in the folder that opens.
 
-The startup installer creates a shortcut in the user's Windows Startup folder.
+After that, Windows will start Download Organizer automatically when you sign in.
 
-The organizer then runs in the background whenever the user logs into Windows.
+### Disable automatic startup
 
-## How It Works
+Open:
 
-The organizer monitors the Downloads directory using the Windows FileSystemWatcher API.
+```text
+shell:startup
+```
 
-When a file appears in the Downloads directory, the script checks whether the file has finished changing before organizing it.
+again and remove the Download Organizer shortcut.
 
-Browser temporary files such as `.crdownload`, `.part`, `.tmp`, `.org.chromium.*`, and `Unconfirmed` files are ignored.
+This does **not** delete the executable itself.
 
-If a file with the same name already exists, the organizer creates a numbered copy instead of overwriting the existing file.
+## Building from source
 
-## Supported File Types
+### Requirements
 
-### Images
+- Windows
+- .NET 8 SDK
 
-JPG, JPEG, PNG, GIF, WEBP, BMP, SVG, TIF, TIFF, HEIC, HEIF, AVIF, RAW, CR2, CR3, NEF, ARW, DNG
+The project uses:
 
-### Videos
+```text
+TargetFramework: net8.0-windows
+Runtime: win-x64
+```
 
-MP4, MKV, AVI, MOV, WEBM, FLV, WMV, M4V, MPEG, MPG, TS, MTS, M2TS, 3GP
+Build:
 
-### Audio
+```powershell
+cd "DownloadOrganizerBuild"
+dotnet build
+```
 
-MP3, WAV, FLAC, OGG, OPUS, AAC, M4A, WMA, AIFF, APE
+Create the standalone release executable:
 
-### Documents
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+```
 
-PDF, DOC, DOCX, TXT, ODT, RTF, EPUB, MOBI, AZW, AZW3
+The published files are created under:
 
-### Spreadsheets
+```text
+DownloadOrganizerBuild\bin\Release\net8.0-windows\win-x64\publish\
+```
 
-XLS, XLSX, CSV, ODS, TSV
+The main release file is:
 
-### Presentations
+```text
+DownloadOrganizer.exe
+```
 
-PPT, PPTX, ODP
+## Project structure
 
-### Archives
+```text
+download-organizer-windows-main/
+├── DownloadOrganizer.cs
+├── DownloadOrganizer.png
+├── DownloadOrganizerBuild/
+│   ├── Program.cs
+│   └── DownloadOrganizerBuild.csproj
+├── download-organizer.ps1
+├── start-download-organizer.ps1
+├── install-startup.ps1
+├── LICENSE
+└── README.md
+```
 
-ZIP, RAR, 7Z, TAR, GZ, BZ2, XZ, ZST, TGZ
+The C# project is the current Windows implementation. The PowerShell files are retained as source/history from the earlier implementation.
 
-### Installers
+## How it works
 
-EXE, MSI, MSIX, MSIXBUNDLE
+The organizer repeatedly checks the top level of the user's Downloads folder.
 
-### Disk Images
+For each file it:
 
-ISO, IMG, VHD, VHDX
+1. Ignores browser temporary/incomplete files.
+2. Checks whether Windows Explorer is currently editing a filename.
+3. Checks whether the file can be opened exclusively.
+4. Determines the category from the file extension.
+5. Creates the destination category folder if necessary.
+6. Moves the file.
+7. If a file with the same name already exists, creates a numbered filename such as:
 
-### Code
+```text
+photo.png
+photo_1.png
+photo_2.png
+```
 
-PY, PS1, SH, BASH, JS, TS, HTML, CSS, C, CPP, H, HPP, JAVA, RS, GO, JSON, XML, YAML, YML, TOML, SQL
-
-### Subtitles
-
-SRT, ASS, SSA, VTT, SUB
-
-### Fonts
-
-TTF, OTF, WOFF, WOFF2
-
-Unsupported file types are placed in Other.
-
-## Limitations
-
-The organizer processes files directly inside the Downloads folder.
-
-Files inside existing subdirectories are not processed.
+The organizer does not recursively reorganize files already inside category folders.
 
 ## License
 
-MIT License
+This project is licensed under the MIT License. See `LICENSE` for details.
